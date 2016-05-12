@@ -78,41 +78,26 @@ object CloudFormationClient {
   }
 }
 
-case class StackDetails(name: String, template: String, parameters: List[AwsParameter])
-
-trait Builder[T] {
-  def withStackName(name: String): T
-  def withTemplateBody(name: String): T
-  def withParameters(params: List[AwsParameter]): T
-  def withCapabilities(capabilities: Capability*): T
+case class StackDetails(name: String, template: String, parameters: List[AwsParameter]) {
+  def to[StackRequest <: {
+    def withStackName(name: String): StackRequest
+    def withTemplateBody(name: String): StackRequest
+    def withParameters(params: java.util.Collection[AwsParameter]): StackRequest
+    def withCapabilities(capabilities: java.util.Collection[String]): StackRequest
+  }](req: StackRequest): StackRequest = {
+    req.withStackName(name)
+      .withTemplateBody(template)
+      .withParameters(parameters)
+      .withCapabilities(List(CAPABILITY_IAM).map(_.toString))
+  }
 }
 
 object Implicits {
-  implicit class CreateStackRequestToBuilder(s: CreateStackRequest) extends Builder[CreateStackRequest] {
-    override def withStackName(name: String): CreateStackRequest = s.withStackName(name)
-    override def withTemplateBody(name: String): CreateStackRequest = s.withTemplateBody(name)
-    override def withParameters(params: List[AwsParameter]): CreateStackRequest = s.withParameters(params)
-    override def withCapabilities(capabilities: Capability*): CreateStackRequest = s.withCapabilities(capabilities: _*)
-  }
-  implicit class UpdateStackRequestToBuilder(s: UpdateStackRequest) extends Builder[UpdateStackRequest] {
-    override def withStackName(name: String) = s.withStackName(name)
-    override def withTemplateBody(name: String) = s.withTemplateBody(name)
-    override def withParameters(params: List[AwsParameter]) = s.withParameters(params)
-    override def withCapabilities(capabilities: Capability*): UpdateStackRequest = s.withCapabilities(capabilities: _*)
-  }
-
-  implicit def potentialStackToCreateRequest(ps: StackDetails): CreateStackRequest = populate(ps, new CreateStackRequest)
-  implicit def potentialStackToUpdateRequest(ps: StackDetails): UpdateStackRequest = populate(ps, new UpdateStackRequest)
+  implicit def potentialStackToCreateRequest(ps: StackDetails): CreateStackRequest = ps.to(new CreateStackRequest)
+  implicit def potentialStackToUpdateRequest(ps: StackDetails): UpdateStackRequest = ps.to(new UpdateStackRequest)
 
   implicit def tuplesToParams(tuples: List[(String, String)]): List[AwsParameter] = tuples.map {
     case (key, value) ⇒ new AwsParameter().withParameterKey(key).withParameterValue(value)
   }
   implicit def stackStatus(status: String): StackStatus = StackStatus.valueOf(status)
-
-  private def populate[T](ps:StackDetails, builder: Builder[T])(implicit ev: T ⇒ Builder[T]): T = {
-    builder.withStackName(ps.name)
-      .withTemplateBody(ps.template)
-      .withParameters(ps.parameters)
-      .withCapabilities(CAPABILITY_IAM)
-  }
 }
